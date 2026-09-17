@@ -326,7 +326,8 @@ def api_run_log():
     offset = request.args.get("offset", default=0, type=int)
     with _lock:
         lines = _run["lines"][offset:]
-        return jsonify({"lines": lines, "next_offset": offset + len(lines),
+        # offset возвращаем эхом: клиент по нему отбрасывает ответ на устаревший запрос
+        return jsonify({"offset": offset, "lines": lines, "next_offset": offset + len(lines),
                          "running": _run["running"], "exit_code": _run["exit_code"],
                          "benchmark": _run["benchmark"], "log_name": _run["log_name"]})
 

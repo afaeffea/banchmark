@@ -405,26 +405,40 @@ $("#btn-stop").onclick = async () => {
 
 function startPolling() { if (!pollTimer) pollTimer = setInterval(pollLog, 700); pollLog(); }
 
+// Интервал срабатывает по таймеру, а ответ может идти дольше периода опроса. Без этого
+// флага два запроса уходили с одним и тем же устаревшим offset, каждый возвращал одни и те же
+// строки, и лог задваивался — локально незаметно, а через интернет сразу.
+let pollInFlight = false;
+
 async function pollLog() {
-  let data;
-  try { data = await api("/api/run/log?offset=" + logOffset); } catch { return; }
-  if (data.lines.length) {
-    const pre = $("#live-log");
-    const atBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 30;
-    pre.textContent += data.lines.join("\n") + "\n";
-    if (atBottom) pre.scrollTop = pre.scrollHeight;
-  }
-  logOffset = data.next_offset;
-  const badge = $("#run-badge");
-  $("#btn-run").disabled = data.running;
-  $("#btn-stop").disabled = !data.running;
-  if (data.running) {
-    badge.textContent = "выполняется"; badge.className = "badge run";
-  } else {
-    clearInterval(pollTimer); pollTimer = null;
-    if (data.exit_code === null) { badge.textContent = "простаивает"; badge.className = "badge"; }
-    else if (data.exit_code === 0) { badge.textContent = "завершено успешно"; badge.className = "badge ok"; }
-    else { badge.textContent = "код выхода " + data.exit_code; badge.className = "badge err"; }
+  if (pollInFlight) return;
+  pollInFlight = true;
+  const requested = logOffset;
+  try {
+    const data = await api("/api/run/log?offset=" + requested);
+    if (data.offset !== undefined && data.offset !== requested) return;  // ответ устарел
+    if (data.lines.length) {
+      const pre = $("#live-log");
+      const atBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 30;
+      pre.textContent += data.lines.join("\n") + "\n";
+      if (atBottom) pre.scrollTop = pre.scrollHeight;
+    }
+    logOffset = data.next_offset;
+    const badge = $("#run-badge");
+    $("#btn-run").disabled = data.running || !SESSION.authenticated;
+    $("#btn-stop").disabled = !data.running || !SESSION.authenticated;
+    if (data.running) {
+      badge.textContent = "выполняется"; badge.className = "badge run";
+    } else {
+      clearInterval(pollTimer); pollTimer = null;
+      if (data.exit_code === null) { badge.textContent = "простаивает"; badge.className = "badge"; }
+      else if (data.exit_code === 0) { badge.textContent = "завершено успешно"; badge.className = "badge ok"; }
+      else { badge.textContent = "код выхода " + data.exit_code; badge.className = "badge err"; }
+    }
+  } catch {
+    // сеть моргнула — просто дождёмся следующего тика
+  } finally {
+    pollInFlight = false;
   }
 }
 
