@@ -1,0 +1,31 @@
+# Источник тестовых данных для STT/TTS. Меняется без правок кода.
+#
+# Датасет должен отдавать строки через datasets-server — проверить можно так:
+#   https://datasets-server.huggingface.co/rows?dataset=<имя>&config=<конфиг>&split=<сплит>&offset=0&length=2
+# Если в ответ приходит "Scan size limit exceeded", датасет не годится: его parquet
+# упакован так, что ради одной строки качается весь шард (так у google/fleurs).
+#
+# rulibrispeech выбран как нейтральный к вендорам. Датасет не должен принадлежать
+# ни одному из сравниваемых провайдеров: например, bond005/sberdevices_golos_10h_crowd —
+# корпус Сбера, и сравнивать на нём сберовские движки с чужими некорректно.
+
+stt:
+  dataset: bond005/rulibrispeech
+  config: default
+  split: test
+  text_field: transcription
+  offset: 0
+  min_chars: 15
+  max_chars: 200
+  # синхронные API ограничены по длине: у Yandex STT v1 это 30с и 1 МБ
+  max_duration_s: 20
+
+tts:
+  dataset: bond005/rulibrispeech
+  config: default
+  split: test
+  text_field: transcription
+  # другое смещение, чтобы фразы для синтеза не совпадали с аудио для распознавания
+  offset: 600
+  min_chars: 15
+  max_chars: 140

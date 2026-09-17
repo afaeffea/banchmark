@@ -1,0 +1,59 @@
+# Реестр моделей для бенчмарка tool-calling.
+# Файл редактируется из веб-панели (webui), можно править и вручную.
+# base_url — любой OpenAI-совместимый эндпоинт: прямой API вендора или шлюз-роутер.
+# rate_limit — общий на весь прогон: при работе через роутер лимит считается по ключу.
+
+rate_limit:
+  requests_per_minute: 9
+  max_retries: 4
+models:
+- id: deepseek
+  display_name: DeepSeek V4.1
+  model: deepseek/deepseek-v4.1-flash
+  base_url: https://api.tokenrouter.com/v1
+  api_key_env: TOKENROUTER_API_KEY
+- id: glm_flash
+  display_name: GLM 5.3 Flash
+  model: z-ai/glm-5.3-flash
+  base_url: https://api.tokenrouter.com/v1
+  api_key_env: TOKENROUTER_API_KEY
+- id: mistral
+  display_name: Mistral Small 2603
+  model: mistralai/mistral-small-2603
+  base_url: https://api.tokenrouter.com/v1
+  api_key_env: TOKENROUTER_API_KEY
+- id: qwen
+  display_name: Flash Qwen 3.8 Max
+  model: qwen/qwen3.8-max
+  base_url: https://api.tokenrouter.com/v1
+  api_key_env: TOKENROUTER_API_KEY
+- id: qwen_flash
+  display_name: Qwen 3.8 Flash
+  model: qwen/qwen3.8-flash
+  base_url: https://api.tokenrouter.com/v1
+  api_key_env: TOKENROUTER_API_KEY
+- id: qwen_plus
+  display_name: Qwen 3.7 Plus
+  model: qwen/qwen3.7-plus
+  base_url: https://api.tokenrouter.com/v1
+  api_key_env: TOKENROUTER_API_KEY
+- id: qwen_max
+  display_name: Qwen 3.7 Max
+  model: qwen/qwen3.7-max
+  base_url: https://api.tokenrouter.com/v1
+  api_key_env: TOKENROUTER_API_KEY
+- id: glm
+  display_name: GLM 5.3
+  model: z-ai/glm-5.3
+  base_url: https://api.tokenrouter.com/v1
+  api_key_env: TOKENROUTER_API_KEY
+- id: glm_fast
+  display_name: GLM 5.3 Fast
+  model: z-ai/glm-5.3-fast
+  base_url: https://api.tokenrouter.com/v1
+  api_key_env: TOKENROUTER_API_KEY
+- id: Deepseek_0731
+  display_name: DeepSeek V4 Flash
+  model: deepseek/deepseek-v4-flash-0731
+  base_url: https://api.tokenrouter.com/v1
+  api_key_env: TOKENROUTER_API_KEY

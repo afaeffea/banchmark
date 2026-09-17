@@ -1,0 +1,11 @@
+requests>=2.31
+python-dotenv>=1.0
+numpy>=1.26
+soundfile>=0.12
+jiwer>=3.0
+openai>=1.30
+PyYAML>=6.0
+tabulate>=0.9
+Flask>=3.0
+psycopg[binary]>=3.1
+gunicorn>=21.2

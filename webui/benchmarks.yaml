@@ -1,0 +1,67 @@
+# Реестр бенчмарков для веб-панели. Панель строит форму запуска из этого файла,
+# поэтому добавить новый бенчмарк можно здесь, не трогая код сервера или HTML.
+#
+# module         — python-модуль, запускается как `python -m <module>`
+# supports_models — показывать ли чекбоксы выбора моделей (передаются как --models a,b,c)
+# args            — дополнительные поля формы; flag подставляется в командную строку
+
+benchmarks:
+  - id: toolcalling
+    title: "Tool-calling (текстовые модели)"
+    module: toolcalling_bench.run
+    supports_models: true
+    args:
+      - name: suite
+        label: "Набор задач"
+        type: select
+        default: hard
+        flag: "--suite"
+        options:
+          - value: basic
+            label: "Базовый — проверка механики (7 задач)"
+          - value: hard
+            label: "Тяжёлый — различает модели (9 задач)"
+          - value: all
+            label: "Оба набора (16 задач)"
+
+  - id: stt
+    title: "STT — распознавание речи"
+    module: stt_tts_bench.run_stt
+    supports_models: false
+    args:
+      - name: source
+        label: "Источник записей"
+        type: select
+        default: dataset
+        flag: "--source"
+        options:
+          - value: dataset
+            label: "Корпус — дикторская начитка"
+          - value: mic
+            label: "Мои записи с микрофона"
+      - name: n
+        label: "Количество аудио-сэмплов"
+        type: number
+        default: 20
+        flag: "--n"
+
+  - id: tts
+    title: "TTS — синтез речи"
+    module: stt_tts_bench.run_tts
+    supports_models: false
+    args:
+      - name: source
+        label: "Источник фраз"
+        type: select
+        default: dataset
+        flag: "--source"
+        options:
+          - value: dataset
+            label: "Корпус — фразы из датасета"
+          - value: mic
+            label: "Эталоны моих записей с микрофона"
+      - name: n
+        label: "Количество фраз"
+        type: number
+        default: 10
+        flag: "--n"

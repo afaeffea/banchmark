@@ -1,0 +1,957 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Панель бенчмарков</title>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1c1f26; --panel-2: #23262f; --line: #2e323c;
+    --text: #e6e8ee; --muted: #9aa1ae; --accent: #6ea8fe; --ok: #5ad19a; --err: #ff7b72;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 "Segoe UI", system-ui, sans-serif; }
+  header { padding: 18px 24px; border-bottom: 1px solid var(--line); display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+  h1 { font-size: 17px; margin: 0; font-weight: 600; }
+  header .hint { color: var(--muted); font-size: 12px; }
+  nav { display: flex; gap: 4px; padding: 0 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  nav button { background: none; border: none; color: var(--muted); padding: 12px 16px; cursor: pointer; font-size: 14px; border-bottom: 2px solid transparent; }
+  nav button:hover { color: var(--text); }
+  nav button.active { color: var(--accent); border-bottom-color: var(--accent); }
+  main { padding: 20px 24px 60px; max-width: 1200px; }
+  section { display: none; }
+  section.active { display: block; }
+  h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 24px 0 10px; font-weight: 600; }
+  h2:first-child { margin-top: 0; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+  label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 12px; }
+  input, select, textarea { background: var(--panel-2); border: 1px solid var(--line); color: var(--text); border-radius: 6px; padding: 8px 10px; font: inherit; width: 100%; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+  textarea { resize: vertical; }
+  button.btn { background: var(--accent); color: #0f1115; border: none; border-radius: 6px; padding: 9px 16px; font: inherit; font-weight: 600; cursor: pointer; }
+  button.btn:hover { filter: brightness(1.1); }
+  button.btn[disabled] { opacity: .45; cursor: not-allowed; filter: none; }
+  button.ghost { background: none; border: 1px solid var(--line); color: var(--text); border-radius: 6px; padding: 8px 14px; font: inherit; cursor: pointer; }
+  button.ghost:hover { border-color: var(--accent); color: var(--accent); }
+  button.icon { background: none; border: none; color: var(--muted); cursor: pointer; padding: 4px 8px; font-size: 15px; }
+  button.icon:hover { color: var(--err); }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .grid { display: grid; gap: 12px; }
+  .checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+  .check { display: flex; gap: 8px; align-items: center; background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; cursor: pointer; }
+  .check input { width: auto; }
+  .check .sub { color: var(--muted); font-size: 12px; }
+  pre.log { background: #0f1115; border: 1px solid var(--line); border-radius: 8px; padding: 14px; max-height: 460px; overflow: auto; font: 12.5px/1.55 Consolas, "Courier New", monospace; white-space: pre-wrap; word-break: break-word; margin: 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  td input { padding: 6px 8px; font-size: 13px; }
+  .table-wrap { overflow-x: auto; }
+  .status { font-size: 13px; padding: 8px 0; min-height: 20px; }
+  .status.ok { color: var(--ok); } .status.err { color: var(--err); }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); }
+  .badge.run { color: var(--accent); border-color: var(--accent); }
+  .badge.ok { color: var(--ok); border-color: var(--ok); }
+  .badge.err { color: var(--err); border-color: var(--err); }
+  .files { display: grid; gap: 6px; }
+  .file { display: flex; justify-content: space-between; gap: 12px; padding: 9px 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+  .file:hover { border-color: var(--accent); }
+  .file .meta { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .muted { color: var(--muted); font-size: 12.5px; }
+  .warn { color: var(--err); font-size: 12.5px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Панель бенчмарков</h1>
+  <span class="hint">STT/TTS · tool-calling — запуск, модели, креды, логи</span>
+  <span class="badge" id="storage-badge" hidden></span>
+  <div id="auth-box" class="row" style="margin-left: auto;" hidden>
+    <input id="auth-password" type="password" placeholder="пароль" style="width: 160px;">
+    <button class="ghost" id="btn-login">Войти</button>
+  </div>
+  <div id="auth-ok" class="row" style="margin-left: auto;" hidden>
+    <span class="badge ok">вход выполнен</span>
+    <button class="ghost" id="btn-logout">Выйти</button>
+  </div>
+</header>
+
+<nav>
+  <button data-tab="run" class="active">Прогон</button>
+  <button data-tab="models">Модели</button>
+  <button data-tab="creds">Креды</button>
+  <button data-tab="mic">Микрофон</button>
+  <button data-tab="listen">Прослушивание</button>
+  <button data-tab="files">Логи и результаты</button>
+</nav>
+
+<main>
+  <!-- ===== Прогон ===== -->
+  <section id="tab-run" class="active">
+    <div class="card">
+      <div class="grid" style="grid-template-columns: minmax(260px, 1fr) auto; align-items: end;">
+        <div>
+          <label for="benchmark">Бенчмарк</label>
+          <select id="benchmark"></select>
+        </div>
+        <div class="row">
+          <button class="btn" id="btn-run">Запустить</button>
+          <button class="ghost" id="btn-stop" disabled>Остановить</button>
+        </div>
+      </div>
+      <div id="bench-args" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-top: 14px;"></div>
+      <div id="models-block" style="margin-top: 16px;">
+        <label>Модели <span class="muted" id="models-hint"></span></label>
+        <div class="checks" id="model-checks"></div>
+      </div>
+      <div class="status" id="run-status"></div>
+    </div>
+
+    <h2>Лог выполнения <span class="badge" id="run-badge">простаивает</span></h2>
+    <pre class="log" id="live-log">Лог появится здесь после запуска.</pre>
+  </section>
+
+  <!-- ===== Модели ===== -->
+  <section id="tab-models">
+    <div class="card">
+      <div class="muted" style="margin-bottom: 12px;">
+        Любой OpenAI-совместимый эндпоинт: прямой API вендора или шлюз-роутер.
+        Поле <b>api_key_env</b> — имя переменной из вкладки «Креды», сам ключ здесь не хранится.
+      </div>
+      <div class="table-wrap">
+        <table id="models-table">
+          <thead><tr><th>id</th><th>Название</th><th>model</th><th>base_url</th><th>api_key_env</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="row" style="margin-top: 14px;">
+        <button class="ghost" id="btn-add-model">+ Добавить модель</button>
+        <button class="btn" id="btn-save-models">Сохранить</button>
+      </div>
+      <div class="status" id="models-status"></div>
+    </div>
+
+    <div class="card">
+      <h2>Ограничение частоты</h2>
+      <div class="muted" style="margin-bottom: 12px;">
+        Общее на весь прогон: при работе через роутер лимит считается по ключу, а не по модели.
+        0 — не ограничивать. Пауза троттлинга не попадает в замер латентности.
+      </div>
+      <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); max-width: 560px;">
+        <div>
+          <label for="rl-rpm">Запросов в минуту</label>
+          <input id="rl-rpm" type="number" min="0" step="1">
+        </div>
+        <div>
+          <label for="rl-retries">Повторов при 429</label>
+          <input id="rl-retries" type="number" min="0" step="1">
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Массовое переключение</h2>
+      <div class="muted" style="margin-bottom: 12px;">Проставить один base_url и одну переменную ключа всем моделям сразу — удобно при переезде на роутер или обратно на прямые API.</div>
+      <div class="grid" style="grid-template-columns: 2fr 1fr auto; align-items: end;">
+        <div>
+          <label for="bulk-url">base_url</label>
+          <input id="bulk-url" list="url-suggestions" placeholder="https://...">
+          <datalist id="url-suggestions">
+            <option value="https://api.tokenrouter.io/v1">
+            <option value="http://127.0.0.1:7050/v1">
+            <option value="https://openrouter.ai/api/v1">
+          </datalist>
+        </div>
+        <div>
+          <label for="bulk-env">api_key_env</label>
+          <input id="bulk-env" placeholder="TOKENROUTER_API_KEY">
+        </div>
+        <button class="ghost" id="btn-bulk">Применить ко всем</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Креды ===== -->
+  <section id="tab-creds">
+    <div class="card">
+      <div class="muted" style="margin-bottom: 12px;">
+        Значения читаются и пишутся в <b>.env</b> (файл в .gitignore). Панель слушает только 127.0.0.1.
+      </div>
+      <div id="env-missing"></div>
+      <div class="table-wrap">
+        <table id="env-table">
+          <thead><tr><th style="width: 34%;">Переменная</th><th>Значение</th><th style="width: 90px;"></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="row" style="margin-top: 14px;">
+        <button class="ghost" id="btn-add-env">+ Добавить переменную</button>
+        <button class="btn" id="btn-save-env">Сохранить</button>
+      </div>
+      <div class="status" id="env-status"></div>
+    </div>
+  </section>
+
+  <!-- ===== Микрофон ===== -->
+  <section id="tab-mic">
+    <div class="card">
+      <div class="muted" style="margin-bottom: 14px;">
+        Запишите фразу, впишите, что именно вы сказали — это станет эталоном. Дальше одна запись
+        даёт сразу два теста: <b>аудио уходит в STT</b> (сверяем расшифровку с вашим эталоном),
+        а <b>тот же текст уходит в TTS</b> (синтез вашей фразы обоими провайдерами).
+        Чтобы прогнать их, на вкладке «Прогон» выберите источник «Мои записи с микрофона».
+      </div>
+      <div class="row">
+        <button class="btn" id="btn-rec">● Записать</button>
+        <span class="badge" id="rec-state">готов</span>
+      </div>
+      <div id="rec-preview" hidden style="margin-top: 16px;">
+        <audio id="rec-audio" controls style="width: 100%;"></audio>
+        <label for="rec-text" style="margin-top: 12px;">Что вы сказали — эталонный текст</label>
+        <textarea id="rec-text" rows="3" placeholder="Например: Здравствуйте, меня зовут Иван"></textarea>
+        <div class="row" style="margin-top: 12px;">
+          <button class="btn" id="btn-save-rec">Сохранить</button>
+          <button class="ghost" id="btn-discard-rec">Перезаписать</button>
+        </div>
+      </div>
+      <div class="status" id="mic-status"></div>
+    </div>
+
+    <h2>Сохранённые записи</h2>
+    <div id="mic-list"></div>
+  </section>
+
+  <!-- ===== Прослушивание ===== -->
+  <section id="tab-listen">
+    <div class="card">
+      <div class="grid" style="grid-template-columns: 1fr auto; align-items: end;">
+        <div>
+          <label for="audio-set">Набор записей</label>
+          <select id="audio-set"></select>
+        </div>
+        <button class="ghost" id="btn-refresh-audio">Обновить</button>
+      </div>
+      <div class="muted" id="audio-hint" style="margin-top: 10px;"></div>
+    </div>
+    <div id="audio-items"></div>
+  </section>
+
+  <!-- ===== Логи и результаты ===== -->
+  <section id="tab-files">
+    <div class="card">
+      <div class="row" style="justify-content: space-between;">
+        <h2 style="margin: 0;">Логи прошлых прогонов</h2>
+        <button class="ghost" id="btn-refresh-files">Обновить</button>
+      </div>
+      <div class="files" id="log-files" style="margin-top: 12px;"></div>
+    </div>
+
+    <div class="card">
+      <h2>Результаты (CSV)</h2>
+      <div class="files" id="result-files"></div>
+    </div>
+
+    <div class="card" id="viewer-card" style="display: none;">
+      <div class="row" style="justify-content: space-between;">
+        <h2 style="margin: 0;" id="viewer-title"></h2>
+        <button class="ghost" id="btn-close-viewer">Закрыть</button>
+      </div>
+      <div id="viewer-body" style="margin-top: 12px;"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = (sel) => document.querySelector(sel);
+const api = async (url, options) => {
+  const resp = await fetch(url, options);
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+  return data;
+};
+const setStatus = (el, text, kind = "") => { el.textContent = text; el.className = "status " + kind; };
+
+let BENCHMARKS = [], MODELS = [], logOffset = 0, pollTimer = null;
+let SESSION = { authenticated: true, password_required: false, cloud: false, storage: "files" };
+
+// ---------- вход ----------
+async function loadSession() {
+  SESSION = await api("/api/session");
+  const needLogin = SESSION.password_required && !SESSION.authenticated;
+  $("#auth-box").hidden = !needLogin;
+  $("#auth-ok").hidden = !(SESSION.password_required && SESSION.authenticated);
+  const badge = $("#storage-badge");
+  badge.hidden = false;
+  badge.textContent = SESSION.cloud ? "облако · Postgres" : "локально · файлы";
+  // всё, что тратит деньги или меняет конфигурацию, недоступно без входа
+  ["#btn-run", "#btn-stop", "#btn-save-models", "#btn-save-env", "#btn-rec", "#btn-save-rec"]
+    .forEach((sel) => { const el = $(sel); if (el) el.disabled = !SESSION.authenticated; });
+}
+
+$("#btn-login").onclick = async () => {
+  try {
+    await api("/api/login", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: $("#auth-password").value }),
+    });
+    $("#auth-password").value = "";
+    await loadSession();
+    await loadModels();
+  } catch (e) { alert(e.message); }
+};
+
+$("#btn-logout").onclick = async () => {
+  await api("/api/logout", { method: "POST" });
+  await loadSession();
+};
+
+// ---------- вкладки ----------
+document.querySelectorAll("nav button").forEach((btn) => {
+  btn.onclick = () => {
+    document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("active", b === btn));
+    document.querySelectorAll("section").forEach((s) => s.classList.toggle("active", s.id === "tab-" + btn.dataset.tab));
+    if (btn.dataset.tab === "files") refreshFiles();
+    if (btn.dataset.tab === "creds") loadEnv();
+    if (btn.dataset.tab === "listen") loadAudioSets();
+    if (btn.dataset.tab === "mic") loadMicSamples();
+  };
+});
+
+// ---------- прогон ----------
+async function loadBenchmarks() {
+  BENCHMARKS = await api("/api/benchmarks");
+  const select = $("#benchmark");
+  select.innerHTML = "";
+  BENCHMARKS.forEach((b) => {
+    const opt = document.createElement("option");
+    opt.value = b.id; opt.textContent = b.title;
+    select.appendChild(opt);
+  });
+  select.onchange = renderBenchForm;
+  renderBenchForm();
+}
+
+function renderBenchForm() {
+  const bench = BENCHMARKS.find((b) => b.id === $("#benchmark").value);
+  const argsBox = $("#bench-args");
+  argsBox.innerHTML = "";
+  (bench.args || []).forEach((arg) => {
+    const wrap = document.createElement("div");
+    const label = document.createElement("label");
+    label.textContent = arg.label; label.htmlFor = "arg-" + arg.name;
+    let field;
+    if (arg.type === "select") {
+      field = document.createElement("select");
+      (arg.options || []).forEach((opt) => {
+        const option = document.createElement("option");
+        option.value = opt.value; option.textContent = opt.label || opt.value;
+        field.appendChild(option);
+      });
+    } else {
+      field = document.createElement("input");
+      field.type = arg.type === "number" ? "number" : "text";
+    }
+    field.id = "arg-" + arg.name;
+    field.value = arg.default ?? "";
+    field.dataset.argName = arg.name;
+    wrap.append(label, field); argsBox.appendChild(wrap);
+  });
+  $("#models-block").style.display = bench.supports_models ? "" : "none";
+}
+
+function renderModelChecks() {
+  const box = $("#model-checks");
+  box.innerHTML = "";
+  if (!MODELS.length) {
+    box.innerHTML = '<div class="muted">Список моделей пуст — добавьте их на вкладке «Модели».</div>';
+    return;
+  }
+  MODELS.forEach((m) => {
+    const label = document.createElement("label");
+    label.className = "check";
+    const cb = document.createElement("input");
+    cb.type = "checkbox"; cb.value = m.id; cb.checked = true; cb.dataset.modelCheck = "1";
+    const text = document.createElement("span");
+    text.textContent = m.display_name || m.id;
+    const sub = document.createElement("span");
+    sub.className = "sub"; sub.textContent = m.model;
+    label.append(cb, text, sub);
+    box.appendChild(label);
+  });
+  $("#models-hint").textContent = "— без отмеченных запустятся все";
+}
+
+$("#btn-run").onclick = async () => {
+  const bench = BENCHMARKS.find((b) => b.id === $("#benchmark").value);
+  const args = {};
+  document.querySelectorAll("#bench-args [data-arg-name]").forEach((i) => { args[i.dataset.argName] = i.value; });
+  const models = [...document.querySelectorAll("[data-model-check]")].filter((c) => c.checked).map((c) => c.value);
+  try {
+    await api("/api/run", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ benchmark: bench.id, models, args }),
+    });
+    logOffset = 0;
+    $("#live-log").textContent = "";
+    setStatus($("#run-status"), "Запущено.", "ok");
+    startPolling();
+  } catch (e) { setStatus($("#run-status"), e.message, "err"); }
+};
+
+$("#btn-stop").onclick = async () => {
+  try { await api("/api/run/stop", { method: "POST" }); setStatus($("#run-status"), "Остановка…", ""); }
+  catch (e) { setStatus($("#run-status"), e.message, "err"); }
+};
+
+function startPolling() { if (!pollTimer) pollTimer = setInterval(pollLog, 700); pollLog(); }
+
+async function pollLog() {
+  let data;
+  try { data = await api("/api/run/log?offset=" + logOffset); } catch { return; }
+  if (data.lines.length) {
+    const pre = $("#live-log");
+    const atBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 30;
+    pre.textContent += data.lines.join("\n") + "\n";
+    if (atBottom) pre.scrollTop = pre.scrollHeight;
+  }
+  logOffset = data.next_offset;
+  const badge = $("#run-badge");
+  $("#btn-run").disabled = data.running;
+  $("#btn-stop").disabled = !data.running;
+  if (data.running) {
+    badge.textContent = "выполняется"; badge.className = "badge run";
+  } else {
+    clearInterval(pollTimer); pollTimer = null;
+    if (data.exit_code === null) { badge.textContent = "простаивает"; badge.className = "badge"; }
+    else if (data.exit_code === 0) { badge.textContent = "завершено успешно"; badge.className = "badge ok"; }
+    else { badge.textContent = "код выхода " + data.exit_code; badge.className = "badge err"; }
+  }
+}
+
+// ---------- модели ----------
+async function loadModels() {
+  const data = await api("/api/models");
+  MODELS = data.models || [];
+  $("#rl-rpm").value = data.rate_limit?.requests_per_minute ?? 0;
+  $("#rl-retries").value = data.rate_limit?.max_retries ?? 0;
+  renderModelsTable();
+  renderModelChecks();
+}
+
+function renderModelsTable() {
+  const tbody = $("#models-table tbody");
+  tbody.innerHTML = "";
+  MODELS.forEach((m, idx) => {
+    const tr = document.createElement("tr");
+    ["id", "display_name", "model", "base_url", "api_key_env"].forEach((field) => {
+      const td = document.createElement("td");
+      const input = document.createElement("input");
+      input.value = m[field] || "";
+      if (field === "base_url") input.setAttribute("list", "url-suggestions");
+      input.oninput = () => { MODELS[idx][field] = input.value; };
+      td.appendChild(input); tr.appendChild(td);
+    });
+    const tdDel = document.createElement("td");
+    const del = document.createElement("button");
+    del.className = "icon"; del.textContent = "✕"; del.title = "Удалить";
+    del.onclick = () => { MODELS.splice(idx, 1); renderModelsTable(); renderModelChecks(); };
+    tdDel.appendChild(del); tr.appendChild(tdDel);
+    tbody.appendChild(tr);
+  });
+}
+
+$("#btn-add-model").onclick = () => {
+  MODELS.push({ id: "", display_name: "", model: "", base_url: "", api_key_env: "" });
+  renderModelsTable();
+};
+
+$("#btn-bulk").onclick = () => {
+  const url = $("#bulk-url").value.trim(), env = $("#bulk-env").value.trim();
+  if (!url && !env) return;
+  MODELS.forEach((m) => { if (url) m.base_url = url; if (env) m.api_key_env = env; });
+  renderModelsTable();
+  setStatus($("#models-status"), "Поля проставлены — не забудьте «Сохранить».", "ok");
+};
+
+$("#btn-save-models").onclick = async () => {
+  try {
+    const data = await api("/api/models", {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        models: MODELS,
+        rate_limit: {
+          requests_per_minute: Number($("#rl-rpm").value || 0),
+          max_retries: Number($("#rl-retries").value || 0),
+        },
+      }),
+    });
+    MODELS = data.models;
+    renderModelsTable(); renderModelChecks(); loadEnv();
+    setStatus($("#models-status"), "Сохранено в models.yaml.", "ok");
+  } catch (e) { setStatus($("#models-status"), e.message, "err"); }
+};
+
+// ---------- креды ----------
+let ENV_VARS = [], ENV_DELETED = [], ENV_READONLY = false;
+
+async function loadEnv() {
+  let data;
+  try {
+    data = await api("/api/env");
+  } catch (e) {
+    $("#env-table").hidden = true;
+    $("#btn-add-env").hidden = $("#btn-save-env").hidden = true;
+    setStatus($("#env-status"), "Войдите, чтобы увидеть креды.", "err");
+    return;
+  }
+  $("#env-table").hidden = false;
+
+  // в облаке креды задаются переменными Railway: показываем только факт, что они заданы
+  ENV_READONLY = !!data.readonly;
+  $("#btn-add-env").hidden = ENV_READONLY;
+  $("#btn-save-env").hidden = ENV_READONLY;
+  if (ENV_READONLY) {
+    setStatus($("#env-status"),
+      "Значения задаются переменными окружения Railway и наружу не отдаются.", "");
+  }
+
+  ENV_VARS = data.vars; ENV_DELETED = [];
+  const missingBox = $("#env-missing");
+  missingBox.innerHTML = "";
+  if (data.missing.length) {
+    const div = document.createElement("div");
+    div.className = "warn";
+    div.style.marginBottom = "12px";
+    div.textContent = "Переменные, на которые ссылаются модели, но которых нет в .env: " + data.missing.join(", ");
+    missingBox.appendChild(div);
+    data.missing.forEach((name) => ENV_VARS.push({ name, value: "" }));
+  }
+  renderEnvTable();
+}
+
+function renderEnvTable() {
+  const tbody = $("#env-table tbody");
+  tbody.innerHTML = "";
+
+  if (ENV_READONLY) {
+    ENV_VARS.forEach((v) => {
+      const tr = document.createElement("tr");
+      const tdName = document.createElement("td");
+      tdName.textContent = v.name;
+      const tdValue = document.createElement("td");
+      const badge = document.createElement("span");
+      badge.className = "badge " + (v.is_set ? "ok" : "err");
+      badge.textContent = v.is_set ? "задано" : "не задано";
+      tdValue.appendChild(badge);
+      tr.append(tdName, tdValue, document.createElement("td"));
+      tbody.appendChild(tr);
+    });
+    return;
+  }
+
+  ENV_VARS.forEach((v, idx) => {
+    const tr = document.createElement("tr");
+
+    const tdName = document.createElement("td");
+    const nameInput = document.createElement("input");
+    nameInput.value = v.name;
+    nameInput.oninput = () => { ENV_VARS[idx].name = nameInput.value.trim(); };
+    tdName.appendChild(nameInput);
+
+    const tdValue = document.createElement("td");
+    const valueInput = document.createElement("input");
+    valueInput.type = "password";
+    valueInput.value = v.value;
+    valueInput.placeholder = "не задано";
+    valueInput.oninput = () => { ENV_VARS[idx].value = valueInput.value; };
+    tdValue.appendChild(valueInput);
+
+    const tdActions = document.createElement("td");
+    tdActions.style.whiteSpace = "nowrap";
+    const eye = document.createElement("button");
+    eye.className = "icon"; eye.textContent = "👁"; eye.title = "Показать/скрыть";
+    eye.onclick = () => { valueInput.type = valueInput.type === "password" ? "text" : "password"; };
+    const del = document.createElement("button");
+    del.className = "icon"; del.textContent = "✕"; del.title = "Удалить";
+    del.onclick = () => {
+      if (ENV_VARS[idx].name) ENV_DELETED.push(ENV_VARS[idx].name);
+      ENV_VARS.splice(idx, 1); renderEnvTable();
+    };
+    tdActions.append(eye, del);
+
+    tr.append(tdName, tdValue, tdActions);
+    tbody.appendChild(tr);
+  });
+}
+
+$("#btn-add-env").onclick = () => { ENV_VARS.push({ name: "", value: "" }); renderEnvTable(); };
+
+$("#btn-save-env").onclick = async () => {
+  const vars = {};
+  for (const v of ENV_VARS) { if (v.name) vars[v.name] = v.value; }
+  try {
+    await api("/api/env", {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ vars, deleted: ENV_DELETED }),
+    });
+    setStatus($("#env-status"), "Сохранено в .env — применится со следующего запуска бенчмарка.", "ok");
+    loadEnv();
+  } catch (e) { setStatus($("#env-status"), e.message, "err"); }
+};
+
+// ---------- микрофон ----------
+// MediaRecorder отдаёт webm/opus, а провайдерам нужен PCM16 16 кГц моно — тот же формат,
+// в котором им уходят записи из корпуса. Поэтому пересобираем запись здесь же, в браузере:
+// декодируем, ресемплим через OfflineAudioContext и пишем WAV вручную.
+let mediaRecorder = null, recChunks = [], recTimer = null, recSeconds = 0, recordedWav = null;
+
+function encodeWav(samples, rate) {
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buffer);
+  const writeStr = (offset, str) => { for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i)); };
+  writeStr(0, "RIFF");
+  view.setUint32(4, 36 + samples.length * 2, true);
+  writeStr(8, "WAVE");
+  writeStr(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);            // PCM
+  view.setUint16(22, 1, true);            // моно
+  view.setUint32(24, rate, true);
+  view.setUint32(28, rate * 2, true);     // байт в секунду
+  view.setUint16(32, 2, true);            // выравнивание блока
+  view.setUint16(34, 16, true);           // бит на отсчёт
+  writeStr(36, "data");
+  view.setUint32(40, samples.length * 2, true);
+  let offset = 44;
+  for (let i = 0; i < samples.length; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+    offset += 2;
+  }
+  return new Blob([buffer], { type: "audio/wav" });
+}
+
+async function blobToWav16k(blob) {
+  const ctx = new AudioContext();
+  const decoded = await ctx.decodeAudioData(await blob.arrayBuffer());
+  await ctx.close();
+  const rate = 16000;
+  const offline = new OfflineAudioContext(1, Math.ceil(decoded.duration * rate), rate);
+  const source = offline.createBufferSource();
+  source.buffer = decoded;
+  source.connect(offline.destination);
+  source.start();
+  const rendered = await offline.startRendering();
+  return encodeWav(rendered.getChannelData(0), rate);
+}
+
+async function startRecording() {
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (e) {
+    setStatus($("#mic-status"), "Не удалось получить доступ к микрофону: " + e.message, "err");
+    return;
+  }
+  recChunks = [];
+  mediaRecorder = new MediaRecorder(stream);
+  mediaRecorder.ondataavailable = (e) => { if (e.data.size) recChunks.push(e.data); };
+  mediaRecorder.onstop = async () => {
+    stream.getTracks().forEach((t) => t.stop());
+    clearInterval(recTimer); recTimer = null;
+    $("#rec-state").textContent = "обработка…";
+    try {
+      recordedWav = await blobToWav16k(new Blob(recChunks, { type: recChunks[0]?.type || "audio/webm" }));
+      $("#rec-audio").src = URL.createObjectURL(recordedWav);
+      $("#rec-preview").hidden = false;
+      $("#rec-state").textContent = "записано " + recSeconds + " с";
+      $("#rec-state").className = "badge ok";
+      setStatus($("#mic-status"), "Прослушайте и впишите, что вы сказали.", "");
+    } catch (e) {
+      setStatus($("#mic-status"), "Не удалось обработать запись: " + e.message, "err");
+      $("#rec-state").textContent = "ошибка"; $("#rec-state").className = "badge err";
+    }
+    $("#btn-rec").textContent = "● Записать";
+  };
+  mediaRecorder.start();
+  recSeconds = 0;
+  recTimer = setInterval(() => {
+    recSeconds += 1;
+    $("#rec-state").textContent = "идёт запись — " + recSeconds + " с";
+    if (recSeconds >= 60) stopRecording();   // синхронные API не примут длиннее минуты
+  }, 1000);
+  $("#rec-state").textContent = "идёт запись — 0 с";
+  $("#rec-state").className = "badge run";
+  $("#btn-rec").textContent = "■ Стоп";
+  $("#rec-preview").hidden = true;
+  setStatus($("#mic-status"), "", "");
+}
+
+function stopRecording() {
+  if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+  mediaRecorder = null;
+}
+
+$("#btn-rec").onclick = () => {
+  if (mediaRecorder && mediaRecorder.state === "recording") stopRecording();
+  else startRecording();
+};
+
+$("#btn-discard-rec").onclick = () => {
+  recordedWav = null;
+  $("#rec-preview").hidden = true;
+  $("#rec-text").value = "";
+  $("#rec-state").textContent = "готов"; $("#rec-state").className = "badge";
+};
+
+$("#btn-save-rec").onclick = async () => {
+  const text = $("#rec-text").value.trim();
+  if (!recordedWav) { setStatus($("#mic-status"), "Сначала запишите фразу.", "err"); return; }
+  if (!text) { setStatus($("#mic-status"), "Впишите эталонный текст — что именно вы сказали.", "err"); return; }
+  const form = new FormData();
+  form.append("audio", recordedWav, "recording.wav");
+  form.append("reference_text", text);
+  try {
+    const resp = await fetch("/api/mic", { method: "POST", body: form });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+    setStatus($("#mic-status"), `Сохранено (${data.sample.duration_s} с).`, "ok");
+    $("#btn-discard-rec").onclick();
+    loadMicSamples();
+  } catch (e) { setStatus($("#mic-status"), e.message, "err"); }
+};
+
+async function loadMicSamples() {
+  const samples = await api("/api/mic");
+  const box = $("#mic-list");
+  box.innerHTML = "";
+  if (!samples.length) {
+    const div = document.createElement("div");
+    div.className = "muted"; div.textContent = "Записей пока нет.";
+    box.appendChild(div); return;
+  }
+  samples.forEach((s) => {
+    const card = document.createElement("div");
+    card.className = "card";
+    const head = document.createElement("div");
+    head.className = "row"; head.style.justifyContent = "space-between";
+    const meta = document.createElement("span");
+    meta.className = "muted"; meta.textContent = `${s.created} · ${s.duration_s} с`;
+    const del = document.createElement("button");
+    del.className = "icon"; del.textContent = "✕"; del.title = "Удалить";
+    del.onclick = async () => {
+      await api("/api/mic/" + encodeURIComponent(s.sample_id), { method: "DELETE" });
+      loadMicSamples();
+    };
+    head.append(meta, del);
+    const text = document.createElement("div");
+    text.style.margin = "8px 0"; text.textContent = s.reference_text;
+    const audio = document.createElement("audio");
+    audio.controls = true; audio.preload = "none"; audio.style.width = "100%";
+    audio.src = `/api/mic/${encodeURIComponent(s.sample_id)}/audio`;
+    card.append(head, text, audio);
+    box.appendChild(card);
+  });
+}
+
+// ---------- прослушивание ----------
+async function loadAudioSets() {
+  const sets = await api("/api/audio-sets");
+  const select = $("#audio-set");
+  const previous = select.value;
+  select.innerHTML = "";
+  if (!sets.length) {
+    $("#audio-hint").textContent = "Записей пока нет — прогоните STT или TTS на вкладке «Прогон».";
+    $("#audio-items").innerHTML = "";
+    return;
+  }
+  sets.forEach((s) => {
+    const opt = document.createElement("option");
+    opt.value = s.name;
+    const kind = s.kind === "stt" ? "STT — исходные записи" : "TTS — синтез";
+    opt.textContent = `${kind} · ${s.created} · ${s.count} шт.`;
+    select.appendChild(opt);
+  });
+  select.value = sets.some((s) => s.name === previous) ? previous : sets[0].name;
+  select.onchange = () => renderAudioSet(select.value);
+  renderAudioSet(select.value);
+}
+
+function werBadge(wer) {
+  const span = document.createElement("span");
+  span.className = "badge";
+  if (wer === null || wer === undefined) { span.textContent = "нет данных"; return span; }
+  span.textContent = "WER " + (wer * 100).toFixed(1) + "%";
+  span.className = "badge " + (wer === 0 ? "ok" : wer < 0.2 ? "run" : "err");
+  return span;
+}
+
+function audioPlayer(setName, relative) {
+  const audio = document.createElement("audio");
+  audio.controls = true;
+  audio.preload = "none";
+  audio.style.width = "100%";
+  audio.src = `/api/audio/${encodeURIComponent(setName)}/${relative.split("/").map(encodeURIComponent).join("/")}`;
+  return audio;
+}
+
+async function renderAudioSet(name) {
+  const data = await api("/api/audio-sets/" + encodeURIComponent(name));
+  const box = $("#audio-items");
+  box.innerHTML = "";
+  $("#audio-hint").textContent = data.kind === "stt"
+    ? "Слушайте запись и сверяйте с тем, что услышал каждый движок. Эталон — расшифровка из датасета."
+    : "Слушайте синтез каждого провайдера. Ниже — что расслышали в нём STT-движки: это и есть разборчивость.";
+
+  data.items.forEach((item) => {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const head = document.createElement("div");
+    head.className = "row";
+    head.style.justifyContent = "space-between";
+    const title = document.createElement("b");
+    title.textContent = "#" + item.id;
+    const meta = document.createElement("span");
+    meta.className = "muted";
+    meta.textContent = item.duration_s ? item.duration_s + " с" : "";
+    head.append(title, meta);
+
+    const text = document.createElement("div");
+    text.style.margin = "8px 0 12px";
+    text.textContent = data.kind === "stt" ? item.reference : item.text;
+    card.append(head, text);
+
+    if (data.kind === "stt") {
+      card.appendChild(audioPlayer(name, item.audio));
+      Object.entries(item.hypotheses || {}).forEach(([provider, hyp]) => {
+        const line = document.createElement("div");
+        line.style.marginTop = "10px";
+        const top = document.createElement("div");
+        top.className = "row";
+        const who = document.createElement("b"); who.textContent = provider;
+        top.append(who, werBadge(hyp.error ? null : hyp.wer));
+        const said = document.createElement("div");
+        said.className = "muted";
+        said.style.marginTop = "4px";
+        said.textContent = hyp.error ? "ошибка: " + hyp.error.slice(0, 160) : hyp.text;
+        line.append(top, said);
+        card.appendChild(line);
+      });
+    } else {
+      Object.entries(item.providers || {}).forEach(([provider, entry]) => {
+        const block = document.createElement("div");
+        block.style.marginTop = "12px";
+        const top = document.createElement("div");
+        top.className = "row";
+        const who = document.createElement("b"); who.textContent = provider;
+        const lat = document.createElement("span");
+        lat.className = "muted"; lat.textContent = entry.latency_s + " с";
+        top.append(who, lat);
+        block.appendChild(top);
+        if (entry.error) {
+          const err = document.createElement("div");
+          err.className = "warn"; err.textContent = "ошибка: " + entry.error.slice(0, 200);
+          block.appendChild(err);
+        } else {
+          block.appendChild(audioPlayer(name, entry.audio));
+          Object.entries(entry.heard || {}).forEach(([checker, heard]) => {
+            const line = document.createElement("div");
+            line.style.marginTop = "6px";
+            const top2 = document.createElement("div");
+            top2.className = "row";
+            const label = document.createElement("span");
+            label.className = "muted"; label.textContent = "расслышал " + checker + ":";
+            top2.append(label, werBadge(heard.wer));
+            const said = document.createElement("div");
+            said.className = "muted"; said.style.marginTop = "2px";
+            said.textContent = heard.text;
+            line.append(top2, said);
+            block.appendChild(line);
+          });
+        }
+        card.appendChild(block);
+      });
+    }
+    box.appendChild(card);
+  });
+}
+
+$("#btn-refresh-audio").onclick = loadAudioSets;
+
+// ---------- логи и результаты ----------
+async function refreshFiles() {
+  const [logs, results] = await Promise.all([api("/api/logs"), api("/api/results")]);
+  renderFileList($("#log-files"), logs, "лог-файлов пока нет", (f) => viewLog(f.name));
+  renderFileList($("#result-files"), results, "результатов пока нет", (f) => viewResult(f.name));
+}
+
+function renderFileList(container, files, emptyText, onClick) {
+  container.innerHTML = "";
+  if (!files.length) {
+    const div = document.createElement("div");
+    div.className = "muted"; div.textContent = emptyText;
+    container.appendChild(div); return;
+  }
+  files.forEach((f) => {
+    const div = document.createElement("div");
+    div.className = "file";
+    const name = document.createElement("span"); name.textContent = f.name;
+    const meta = document.createElement("span");
+    meta.className = "meta"; meta.textContent = `${f.modified} · ${(f.size / 1024).toFixed(1)} КБ`;
+    div.append(name, meta);
+    div.onclick = () => onClick(f);
+    container.appendChild(div);
+  });
+}
+
+function openViewer(title) {
+  $("#viewer-card").style.display = "";
+  $("#viewer-title").textContent = title;
+  const body = $("#viewer-body");
+  body.innerHTML = "";
+  return body;
+}
+
+$("#btn-close-viewer").onclick = () => { $("#viewer-card").style.display = "none"; };
+$("#btn-refresh-files").onclick = refreshFiles;
+
+async function viewLog(name) {
+  const data = await api("/api/logs/" + encodeURIComponent(name));
+  const body = openViewer(data.name);
+  const pre = document.createElement("pre");
+  pre.className = "log"; pre.textContent = data.content;
+  body.appendChild(pre);
+  $("#viewer-card").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+async function viewResult(name) {
+  const data = await api("/api/results/" + encodeURIComponent(name));
+  const body = openViewer(data.name);
+  const wrap = document.createElement("div");
+  wrap.className = "table-wrap";
+  const table = document.createElement("table");
+  const thead = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  data.header.forEach((h) => { const th = document.createElement("th"); th.textContent = h; headRow.appendChild(th); });
+  thead.appendChild(headRow);
+  const tbody = document.createElement("tbody");
+  data.rows.forEach((row) => {
+    const tr = document.createElement("tr");
+    row.forEach((cell) => { const td = document.createElement("td"); td.textContent = cell; tr.appendChild(td); });
+    tbody.appendChild(tr);
+  });
+  table.append(thead, tbody); wrap.appendChild(table); body.appendChild(wrap);
+  $("#viewer-card").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+// ---------- старт ----------
+(async () => {
+  await loadSession();
+  await loadBenchmarks();
+  await loadModels();
+  pollLog();
+})();
+</script>
+</body>
+</html>
