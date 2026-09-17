@@ -44,6 +44,15 @@ CREATE TABLE IF NOT EXISTS audio_files (
     PRIMARY KEY (set_name, path)
 );
 
+-- Кэш скачанного датасета: на Railway диск контейнера стирается при рестарте,
+-- и без этого каждый прогон заново тянул бы все записи из HuggingFace.
+CREATE TABLE IF NOT EXISTS dataset_cache (
+    cache_key TEXT NOT NULL,
+    path      TEXT NOT NULL,
+    data      BYTEA NOT NULL,
+    PRIMARY KEY (cache_key, path)
+);
+
 CREATE TABLE IF NOT EXISTS mic_samples (
     sample_id      TEXT PRIMARY KEY,
     reference_text TEXT NOT NULL,

@@ -13,6 +13,7 @@ import io
 import json
 import re
 import shutil
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -75,13 +76,37 @@ def _save_state(cache: Path, state: dict) -> None:
                                           encoding="utf-8")
 
 
+# datasets-server и его CDN периодически отдают 5xx. Один такой ответ не должен ронять
+# прогон, который уже скачал половину набора, поэтому повторяем с нарастающей паузой.
+_TRANSIENT_STATUS = {429, 500, 502, 503, 504}
+
+
+def _get_with_retry(url: str, *, params: dict | None = None, timeout: int = 90,
+                     attempts: int = 4) -> requests.Response:
+    last = ""
+    for attempt in range(attempts):
+        try:
+            resp = requests.get(url, params=params, headers=_auth_headers(), timeout=timeout)
+            if resp.status_code == 200:
+                return resp
+            if resp.status_code not in _TRANSIENT_STATUS:
+                raise RuntimeError(f"HTTP {resp.status_code}: {resp.text[:300]}")
+            last = f"HTTP {resp.status_code}"
+        except requests.RequestException as exc:
+            last = f"{type(exc).__name__}: {exc}"
+        if attempt < attempts - 1:
+            pause = 2.0 * (2 ** attempt)  # 2, 4, 8 секунд
+            print(f"  {last} — повтор через {pause:.0f}s "
+                  f"(попытка {attempt + 2}/{attempts})", flush=True)
+            time.sleep(pause)
+    raise RuntimeError(f"не удалось получить данные за {attempts} попыток, последняя ошибка: {last}")
+
+
 def _fetch_rows(cfg: dict, offset: int, length: int) -> list[dict]:
-    resp = requests.get(_ROWS_URL, params={
+    resp = _get_with_retry(_ROWS_URL, params={
         "dataset": cfg["dataset"], "config": cfg["config"], "split": cfg["split"],
         "offset": offset, "length": length,
-    }, headers=_auth_headers(), timeout=90)
-    if resp.status_code != 200:
-        raise RuntimeError(f"datasets-server вернул HTTP {resp.status_code}: {resp.text[:300]}")
+    })
     payload = resp.json()
     if "rows" not in payload:
         raise RuntimeError(f"datasets-server не отдал строки: {str(payload)[:300]}")
@@ -107,9 +132,7 @@ def _to_pcm16(array: np.ndarray) -> bytes:
 
 
 def _download_audio(row: dict) -> tuple[np.ndarray, int]:
-    url = row["audio"][0]["src"]
-    resp = requests.get(url, timeout=90)
-    resp.raise_for_status()
+    resp = _get_with_retry(row["audio"][0]["src"])
     data, sample_rate = sf.read(io.BytesIO(resp.content), dtype="float32", always_2d=True)
     return data[:, 0], sample_rate  # первый канал: оба STT API принимают только моно
 

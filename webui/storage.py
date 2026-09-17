@@ -19,6 +19,7 @@ from pathlib import Path
 
 from common.env import DATA_DIR, RESULTS_DIR
 from stt_tts_bench import mic_samples
+from stt_tts_bench.dataset import CACHE_DIR
 from . import db
 
 LOGS_DIR = RESULTS_DIR / "logs"
@@ -117,6 +118,9 @@ class FileStorage:
 
     def prepare_mic_for_run(self) -> None:
         """Записи уже на диске."""
+
+    def prepare_dataset_cache(self) -> None:
+        """Кэш уже на диске и переживает перезапуск."""
 
 
 class PostgresStorage:
@@ -250,6 +254,9 @@ class PostgresStorage:
                         "INSERT INTO audio_files (set_name, path, data) VALUES (%s, %s, %s) "
                         "ON CONFLICT (set_name, path) DO UPDATE SET data = EXCLUDED.data",
                         (directory.name, wav.relative_to(directory).as_posix(), wav.read_bytes()))
+
+            # скачанное за этот прогон должно пережить рестарт контейнера
+            self._ingest_dataset_cache(conn)
             conn.commit()
 
         # диск в контейнере всё равно эфемерный: чистим только то, что уже уехало в базу
@@ -257,6 +264,33 @@ class PostgresStorage:
             path.unlink(missing_ok=True)
         for directory in new_sets:
             shutil.rmtree(directory, ignore_errors=True)
+
+    def prepare_dataset_cache(self) -> None:
+        """Выкладывает кэш датасета из базы на диск перед прогоном.
+
+        Раннер работает с файлами и сам докачает недостающее, а после прогона
+        обновлённый кэш уедет обратно в базу (см. _ingest_dataset_cache).
+        """
+        with db.connect() as conn:
+            rows = conn.execute("SELECT cache_key, path, data FROM dataset_cache").fetchall()
+        for row in rows:
+            target = CACHE_DIR / row["cache_key"] / row["path"]
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if not target.exists():
+                target.write_bytes(bytes(row["data"]))
+
+    def _ingest_dataset_cache(self, conn) -> None:
+        if not CACHE_DIR.is_dir():
+            return
+        for directory in CACHE_DIR.iterdir():
+            if not directory.is_dir():
+                continue
+            for item in directory.rglob("*"):
+                if item.is_file():
+                    conn.execute(
+                        "INSERT INTO dataset_cache (cache_key, path, data) VALUES (%s, %s, %s) "
+                        "ON CONFLICT (cache_key, path) DO UPDATE SET data = EXCLUDED.data",
+                        (directory.name, item.relative_to(directory).as_posix(), item.read_bytes()))
 
     def prepare_mic_for_run(self) -> None:
         """Раннеры читают записи с диска, поэтому перед прогоном выкладываем их из базы."""

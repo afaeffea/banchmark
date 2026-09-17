@@ -232,6 +232,9 @@ def start_run(benchmark_id: str, models: list[str], args: dict) -> str:
 
     if uses_mic:
         STORAGE.prepare_mic_for_run()
+    else:
+        # без этого на эфемерном диске контейнера каждый прогон качал бы датасет заново
+        STORAGE.prepare_dataset_cache()
 
     run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_name = f"{benchmark_id}_{run_id}.log"
